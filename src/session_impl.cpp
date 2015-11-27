@@ -487,12 +487,6 @@ namespace aux {
 		m_next_dht_torrent = m_torrents.begin();
 #endif
 		m_next_lsd_torrent = m_torrents.begin();
-		m_udp_mapping[0] = -1;
-		m_udp_mapping[1] = -1;
-#ifdef TORRENT_USE_OPENSSL
-		m_ssl_udp_mapping[0] = -1;
-		m_ssl_udp_mapping[1] = -1;
-#endif
 
 		m_global_class = m_classes.new_peer_class("global");
 		m_tcp_peer_class = m_classes.new_peer_class("tcp");
@@ -1985,6 +1979,7 @@ namespace aux {
 					}
 				} while (ec == error_code(error::address_in_use) && retries > 0);
 			}
+		}
 #endif // TORRENT_USE_OPENSSL
 
 			if (!created_udp_socket && !s.ssl)
@@ -5363,6 +5358,7 @@ namespace aux {
 				, map_transport, ec);
 		}
 
+/*
 		if (mapping == m_udp_mapping[map_transport] && port != 0)
 		{
 			m_external_udp_port = port;
@@ -5371,10 +5367,22 @@ namespace aux {
 					, map_transport);
 			return;
 		}
+*/
+		if (ec)
+		{
+			if (m_alerts.should_post<portmap_error_alert>())
+				m_alerts.emplace_alert<portmap_error_alert>(mapping
+					, map_transport, ec);
+		}
+
+		// look throught our listen sockets to see if this mapping is for one of
+		// them (it could also be a user mapping)
 
 		// look through our listen sockets to see if this mapping is for one of
 		// them (it could also be a user mapping)
 
+		// TODO: 4 this just finds TCP mappings. How do we distinguish TCP from
+		// UDP?
 		std::list<listen_socket_t>::iterator ls
 			= std::find_if(m_listen_sockets.begin(), m_listen_sockets.end()
 			, boost::bind(find_tcp_port_mapping, map_transport, mapping, _1));
@@ -5793,6 +5801,7 @@ namespace aux {
 
 #endif
 
+/*
 	void session_impl::maybe_update_udp_mapping(int nat, int local_port, int external_port)
 	{
 		int local, external, protocol;
@@ -5829,6 +5838,7 @@ namespace aux {
 			return;
 		}
 	}
+*/
 
 #if !defined(TORRENT_DISABLE_ENCRYPTION) && !defined(TORRENT_DISABLE_EXTENSIONS)
 	void session_impl::add_obfuscated_hash(sha1_hash const& obfuscated
@@ -6534,8 +6544,9 @@ namespace aux {
 			remap_ports(1, *i);
 		}
 
-		// TODO: 3 once UDP sockets are part of m_listen_sockets, this is not
+		// TODO: 4 once UDP sockets are part of m_listen_sockets, this is not
 		// necesarry!
+/*
 		if (m_udp_socket.is_open())
 		{
 			error_code ec;
@@ -6558,6 +6569,7 @@ namespace aux {
 			}
 		}
 #endif
+*/
 		return m_natpmp.get();
 	}
 
@@ -6585,8 +6597,9 @@ namespace aux {
 			remap_ports(1, *i);
 		}
 
-		// TODO: 3 once the UDP sockets are part of m_listen_sockets this won't be
+		// TODO: 4 once the UDP sockets are part of m_listen_sockets this won't be
 		// necessary!
+/*
 		if (m_udp_socket.is_open())
 		{
 			error_code ec;
@@ -6609,6 +6622,7 @@ namespace aux {
 			}
 		}
 #endif
+*/
 		return m_upnp.get();
 	}
 
@@ -6645,13 +6659,9 @@ namespace aux {
 			, end(m_listen_sockets.end()); i != end; ++i)
 		{
 			i->tcp_port_mapping[0] = -1;
-			// TODO: 4 clear UDP mapping here too
+			i->udp_port_mapping[0] = -1;
 		}
 
-		m_udp_mapping[0] = -1;
-#ifdef TORRENT_USE_OPENSSL
-		m_ssl_udp_mapping[0] = -1;
-#endif
 		m_natpmp.reset();
 	}
 
@@ -6664,12 +6674,8 @@ namespace aux {
 			, end(m_listen_sockets.end()); i != end; ++i)
 		{
 			i->tcp_port_mapping[1] = -1;
-			// TODO: 4 clear UDP mapping here too
+			i->udp_port_mapping[1] = -1;
 		}
-		m_udp_mapping[1] = -1;
-#ifdef TORRENT_USE_OPENSSL
-		m_ssl_udp_mapping[1] = -1;
-#endif
 		m_upnp.reset();
 	}
 
