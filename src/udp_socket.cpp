@@ -600,7 +600,7 @@ void udp_socket::close()
 	m_abort = true;
 
 #if TORRENT_USE_ASSERTS
-	m_outstanding_when_aborted = num_outstanding();
+	m_outstanding_when_aborted = m_outstanding_op;
 #endif
 }
 
