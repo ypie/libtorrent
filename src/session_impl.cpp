@@ -412,7 +412,7 @@ namespace aux {
 		, m_outstanding_router_lookups(0)
 #endif
 		, m_external_udp_port(0)
-	return 	, m_udp_socket(m_io_service)
+		, m_udp_socket(m_io_service)
 		// TODO: 4 introduce an adapter layer between the udp socket(s) and the
 		// utp socket manager
 		, m_utp_socket_manager(m_settings, m_udp_socket, m_stats_counters, NULL
