@@ -1020,6 +1020,10 @@ namespace aux {
 		{
 			i->sock->close(ec);
 			TORRENT_ASSERT(!ec);
+
+			// TODO: 3 closing the udp sockets here means that
+			// the uTP connections cannot be closed gracefully
+			i->udp_sock->close();
 		}
 		m_listen_sockets.clear();
 		if (m_socks_listen_socket && m_socks_listen_socket->is_open())
@@ -1070,9 +1074,6 @@ namespace aux {
 		m_download_rate.close();
 		m_upload_rate.close();
 
-		// TODO: 3 closing the udp socket here means that
-		// the uTP connections cannot be closed gracefully
-		m_udp_socket.close();
 		m_external_udp_port = 0;
 #ifdef TORRENT_USE_OPENSSL
 		m_ssl_udp_socket.close();
@@ -5910,6 +5911,7 @@ namespace aux {
 	{
 		error_code ec;
 
+		// TODO: 4 this should probably be factored into the udp_socket class
 #if TORRENT_USE_IPV6 && defined IPV6_TCLASS
 		if (m_udp_socket.local_endpoint(ec).address().is_v6())
 			m_udp_socket.set_option(traffic_class(m_settings.get_int(settings_pack::peer_tos)), ec);
