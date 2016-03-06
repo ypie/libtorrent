@@ -2042,13 +2042,15 @@ retry:
 #ifdef TORRENT_USE_OPENSSL
 		int const ssl_port = m_settings.get_int(settings_pack::ssl_listen);
 		udp::endpoint ssl_bind_if(m_listen_interface.address(), ssl_port);
+		tcp::endpoint ssl_bind_ep(m_listen_interface.address(), ssl_port);
 
 		// if ssl port is 0, we don't want to listen on an SSL port
 		if (ssl_port != 0)
 		{
 			// if the socket is already open with the port we want, just leave it
+			error_code err;
 			if (!m_ssl_udp_socket.is_open()
-				|| m_ssl_udp_socket.local_endpoint(err) != ssl_bind_if
+				|| m_ssl_udp_socket.local_endpoint(err) != ssl_bind_ep
 				|| err)
 			{
 				m_ssl_udp_socket.bind(ssl_bind_if, ec);
@@ -2060,7 +2062,6 @@ retry:
 #endif
 					if (m_alerts.should_post<listen_failed_alert>())
 					{
-						error_code err;
 						m_alerts.emplace_alert<listen_failed_alert>(ssl_bind_if.address().to_string()
 							, ssl_port, listen_failed_alert::bind, ec, listen_failed_alert::utp_ssl);
 					}
@@ -2153,8 +2154,7 @@ retry:
 		{
 			if (m_alerts.should_post<listen_succeeded_alert>())
 				m_alerts.emplace_alert<listen_succeeded_alert>(
-					tcp::endpoint(ssl_bind_if.address(), ssl_bind_if.port())
-						, listen_succeeded_alert::utp_ssl);
+					ssl_bind_ep, listen_succeeded_alert::utp_ssl);
 		}
 #endif
 
