@@ -1721,9 +1721,15 @@ namespace aux {
 			// this is best-effort. ignore errors
 			error_code err;
 #ifdef TORRENT_WINDOWS
-			ret.sock->set_option(exclusive_address_use(true), err);
-#endif
+			// according to the documentation, the two options below should have
+			// the same semantics on windows as setting SO_REUSEADDR on other
+			// systems. However, some people experience consistent failures to
+			// close, reopen and rebinding sockets with these options
+//			ret.sock->set_option(exclusive_address_use(true), err);
+//			ret.sock->set_option(tcp::acceptor::reuse_address(true), err);
+#else
 			ret.sock->set_option(tcp::acceptor::reuse_address(true), err);
+#endif
 		}
 
 #if TORRENT_USE_IPV6
@@ -5009,9 +5015,13 @@ retry:
 		if (m_settings.get_int(settings_pack::outgoing_port) > 0)
 		{
 #ifdef TORRENT_WINDOWS
-			s.set_option(exclusive_address_use(true), ec);
-#endif
+			// see comment by the other commented out exclusive_address_use
+//			s.set_option(exclusive_address_use(true), ec);
+//			s.set_option(tcp::acceptor::reuse_address(true), ec);
+#else
 			s.set_option(tcp::acceptor::reuse_address(true), ec);
+#endif
+
 			// ignore errors because the underlying socket may not
 			// be opened yet. This happens when we're routing through
 			// a proxy. In that case, we don't yet know the address of
