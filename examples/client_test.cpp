@@ -1071,8 +1071,9 @@ bool handle_alert(libtorrent::session& ses, libtorrent::alert* a
 	if (torrent_need_cert_alert* p = alert_cast<torrent_need_cert_alert>(a))
 	{
 		torrent_handle h = p->handle;
-		std::string cert = path_append("certificates", to_hex(h.info_hash().to_string())) + ".pem";
-		std::string priv = path_append("certificates", to_hex(h.info_hash().to_string())) + "_key.pem";
+		std::string base = "torrent"; //to_hex(h.info_hash().to_string()));
+		std::string cert = path_append("certificates", base) + ".cert.pem";
+		std::string priv = path_append("certificates", base) + ".key.pem";
 
 #ifdef TORRENT_WINDOWS
 		struct ::_stat st;
