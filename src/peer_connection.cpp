@@ -1080,6 +1080,7 @@ namespace libtorrent
 	void peer_connection::attach_to_torrent(sha1_hash const& ih, bool allow_encrypted)
 	{
 		INVARIANT_CHECK;
+		fprintf(stderr, "peer_connection::attach_to_torrent ==begin==\n");
 
 		TORRENT_ASSERT(!m_disconnecting);
 		TORRENT_ASSERT(m_torrent.expired());

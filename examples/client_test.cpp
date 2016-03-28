@@ -1070,6 +1070,7 @@ bool handle_alert(libtorrent::session& ses, libtorrent::alert* a
 #ifdef TORRENT_USE_OPENSSL
 	if (torrent_need_cert_alert* p = alert_cast<torrent_need_cert_alert>(a))
 	{
+		fprintf(stderr, "::handle_alert handle torrent_need_cert_alert\n");
 		torrent_handle h = p->handle;
 		std::string base = "torrent"; //to_hex(h.info_hash().to_string()));
 		std::string cert = path_append("certificates", base) + ".cert.pem";

@@ -1272,6 +1272,7 @@ namespace libtorrent
 #if BOOST_VERSION >= 104700
 	bool torrent::verify_peer_cert(bool preverified, boost::asio::ssl::verify_context& ctx)
 	{
+		fprintf(stderr, "torrent::verify_peer_cert ==begin== !preverified:%d\n", !preverified);
 		// if the cert wasn't signed by the correct CA, fail the verification
 		if (!preverified) return false;
 
@@ -1283,6 +1284,7 @@ namespace libtorrent
 		// should be accepted automatically, given preverified is true. The leaf certificate
 		// need to be verified to make sure its DN matches the info-hash
 		int depth = X509_STORE_CTX_get_error_depth(ctx.native_handle());
+		fprintf(stderr, "torrent::verify_peer_cert depth: %d\n", depth);
 		if (depth > 0) return true;
 
 		X509* cert = X509_STORE_CTX_get_current_cert(ctx.native_handle());
@@ -1345,6 +1347,7 @@ namespace libtorrent
 				|| strncmp(torrent_name, m_torrent_file->name().c_str(), name_length) == 0)
 			{
 #if !defined(TORRENT_VERBOSE_LOGGING) && !defined(TORRENT_LOGGING)
+				fprintf(stderr, "torrent::verify_peer_cert ==end==\n");
 				return true;
 #else
 				match = true;
@@ -1355,6 +1358,7 @@ namespace libtorrent
 #if defined TORRENT_VERBOSE_LOGGING || defined TORRENT_LOGGING
 		debug_log("<== incoming SSL CONNECTION [ n: %s | match: %s ]"
 			, names.c_str(), match?"yes":"no");
+		fprintf(stderr, "torrent::verify_peer_cert ==end== match: %d\n", match);
 		return match;
 #endif
 
@@ -1364,6 +1368,7 @@ namespace libtorrent
 
 	void torrent::init_ssl(std::string const& cert)
 	{
+		fprintf(stderr, "torrent::init_ssl ==begin==\n");
 		using boost::asio::ssl::context;
 
 		// this is needed for openssl < 1.0 to decrypt keys created by openssl 1.0+
@@ -1468,11 +1473,13 @@ namespace libtorrent
 		// if all went well, set the torrent ssl context to this one
 		m_ssl_ctx = ctx;
 		// tell the client we need a cert for this torrent
+		fprintf(stderr, "torrent::init_ssl post torrent_need_cert_alert, seed_mode: %d\n", seed_mode());
 		alerts().post_alert(torrent_need_cert_alert(get_handle()));
 #else
 		set_error(asio::error::operation_not_supported, "x.509 certificate");
 		pause();
 #endif
+		fprintf(stderr, "torrent::init_ssl ==end==\n");
 	}
 
 #endif // TORRENT_OPENSSL
@@ -4521,6 +4528,7 @@ namespace libtorrent
 		, std::string const& dh_params
 		, std::string const& passphrase)
 	{
+		fprintf(stderr, "torrent::set_ssl_cert ==begin==\n");
 		if (!m_ssl_ctx)
 		{
 			if (alerts().should_post<torrent_error_alert>())
@@ -4555,6 +4563,7 @@ namespace libtorrent
 			if (alerts().should_post<torrent_error_alert>())
 				alerts().post_alert(torrent_error_alert(get_handle(), ec));
 		}
+		fprintf(stderr, "torrent::set_ssl_cert ==end==\n");
 	}
 
 	void torrent::set_ssl_cert_buffer(std::string const& certificate
@@ -6211,6 +6220,7 @@ namespace libtorrent
 	bool torrent::attach_peer(peer_connection* p)
 	{
 //		INVARIANT_CHECK;
+		fprintf(stderr, "torrent::attach_peer ==begin==\n");
 
 #ifdef TORRENT_USE_OPENSSL
 #if BOOST_VERSION >= 104700
@@ -6246,6 +6256,7 @@ namespace libtorrent
 			if (!m_ssl_ctx)
 			{
 				// we don't have a valid cert, don't accept any connection!
+				fprintf(stderr, "torrent::attach_peer disconnect invalid personal cert\n");
 				p->disconnect(errors::invalid_ssl_cert);
 				return false;
 			}
@@ -6257,6 +6268,7 @@ namespace libtorrent
 				// connected to one torrent, and the BitTorrent protocol
 				// to a different one. This is probably an attempt to circumvent
 				// access control. Don't allow it.
+				fprintf(stderr, "torrent::attach_peer disconnect invalid incoming cert\n");
 				p->disconnect(errors::invalid_ssl_cert);
 				return false;
 			}
@@ -6449,6 +6461,7 @@ namespace libtorrent
 			, print_endpoint(p->remote()).c_str(), int(m_connections.size())
 			, m_max_connections);
 #endif
+		fprintf(stderr, "torrent::attach_peer ==end==\n");
 		return true;
 	}
 

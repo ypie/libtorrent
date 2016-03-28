@@ -2225,6 +2225,7 @@ namespace aux {
 	
 	void session_impl::open_listen_port(int flags, error_code& ec)
 	{
+		fprintf(stderr, "session_impl::open_listen_port ==begin==\n");
 		TORRENT_ASSERT(is_network_thread());
 
 		TORRENT_ASSERT(!m_abort);
@@ -2435,6 +2436,7 @@ retry:
 				m_alerts.post_alert(udp_error_alert(udp::endpoint(), ec));
 		}
 
+		fprintf(stderr, "session_impl::open_listen_port async_accept\n");
 		// initiate accepting on the listen sockets
 		for (std::list<listen_socket_t>::iterator i = m_listen_sockets.begin()
 			, end(m_listen_sockets.end()); i != end; ++i)
@@ -2454,6 +2456,7 @@ retry:
 #if defined TORRENT_VERBOSE_LOGGING || defined TORRENT_LOGGING || defined TORRENT_ERROR_LOGGING
 		m_logger = create_log("main_session", listen_port(), false);
 #endif
+		fprintf(stderr, "session_impl::open_listen_port ==end==\n");
 	}
 
 	void session_impl::remap_tcp_ports(boost::uint32_t mask, int tcp_port, int ssl_port)
@@ -2610,6 +2613,7 @@ retry:
 
 	void session_impl::async_accept(boost::shared_ptr<socket_acceptor> const& listener, bool ssl)
 	{
+		fprintf(stderr, "session_impl::async_accept ==begin==\n");
 		TORRENT_ASSERT(!m_abort);
 		shared_ptr<socket_type> c(new socket_type(m_io_service));
 		stream_socket* str = 0;
@@ -2634,14 +2638,17 @@ retry:
 #if defined TORRENT_ASIO_DEBUGGING
 		add_outstanding_async("session_impl::on_accept_connection");
 #endif
+		fprintf(stderr, "session_impl::async_accept bind session_impl::on_accept_connection\n");
 		listener->async_accept(*str
 			, boost::bind(&session_impl::on_accept_connection, this, c
 			, boost::weak_ptr<socket_acceptor>(listener), _1, ssl));
+		fprintf(stderr, "session_impl::async_accept ==end==\n");
 	}
 
 	void session_impl::on_accept_connection(shared_ptr<socket_type> const& s
 		, weak_ptr<socket_acceptor> listen_socket, error_code const& e, bool ssl)
 	{
+		fprintf(stderr, "session_impl::on_accept_connection ==begin==\n");
 #if defined TORRENT_ASIO_DEBUGGING
 		complete_async("session_impl::on_accept_connection");
 #endif
@@ -2724,6 +2731,7 @@ retry:
 #if defined TORRENT_ASIO_DEBUGGING
 			add_outstanding_async("session_impl::ssl_handshake");
 #endif
+			fprintf(stderr, "session_impl::on_accept_connection bind session_impl::ssl_handshake\n");
 			s->get<ssl_stream<stream_socket> >()->async_accept_handshake(
 				boost::bind(&session_impl::ssl_handshake, this, _1, s));
 			m_incoming_sockets.insert(s);
@@ -2733,6 +2741,7 @@ retry:
 		{
 			incoming_connection(s);
 		}
+		fprintf(stderr, "session_impl::on_accept_connection ==end==\n");
 	}
 
 #ifdef TORRENT_USE_OPENSSL
@@ -2745,6 +2754,7 @@ retry:
 
 	void session_impl::ssl_handshake(error_code const& ec, boost::shared_ptr<socket_type> s)
 	{
+		fprintf(stderr, "session_impl::ssl_handshake ==begin== ec: %s\n", ec.message().c_str());
 #if defined TORRENT_ASIO_DEBUGGING
 		complete_async("session_impl::ssl_handshake");
 #endif
@@ -2766,16 +2776,19 @@ retry:
 				m_alerts.post_alert(peer_error_alert(torrent_handle(), endp
 					, peer_id(), ec));
 			}
+			fprintf(stderr, "session_impl::ssl_handshake ==peer_error_alert==\n");
 			return;
 		}
 
 		incoming_connection(s);
+		fprintf(stderr, "session_impl::ssl_handshake ==end==\n");
 	}
 
 #endif // TORRENT_USE_OPENSSL
 
 	void session_impl::incoming_connection(boost::shared_ptr<socket_type> const& s)
 	{
+		fprintf(stderr, "session_impl::incoming_connection ==begin==\n");
 		TORRENT_ASSERT(is_network_thread());
 
 #ifdef TORRENT_USE_OPENSSL
@@ -2790,6 +2803,7 @@ retry:
 #if defined(TORRENT_VERBOSE_LOGGING) || defined(TORRENT_LOGGING)
 			session_log(" <== INCOMING CONNECTION [ ignored, paused ]");
 #endif
+			fprintf(stderr, "session_impl::incoming_connection ==pause==\n");
 			return;
 		}
 
@@ -2804,6 +2818,7 @@ retry:
 				"not retrieve remote endpoint "
 				, print_endpoint(endp).c_str(), ec.message().c_str());
 #endif
+			fprintf(stderr, "session_impl::incoming_connection ==fail==\n");
 			return;
 		}
 
@@ -2826,6 +2841,7 @@ retry:
 			if (m_alerts.should_post<peer_blocked_alert>())
 				m_alerts.post_alert(peer_blocked_alert(torrent_handle()
 					, endp.address(), peer_blocked_alert::utp_disabled));
+			fprintf(stderr, "session_impl::incoming_connection ==utp==\n");
 			return;
 		}
 
@@ -2838,6 +2854,7 @@ retry:
 			if (m_alerts.should_post<peer_blocked_alert>())
 				m_alerts.post_alert(peer_blocked_alert(torrent_handle()
 					, endp.address(), peer_blocked_alert::tcp_disabled));
+			fprintf(stderr, "session_impl::incoming_connection ==tcp==\n");
 			return;
 		}
 
@@ -2860,6 +2877,7 @@ retry:
 			if (m_alerts.should_post<peer_blocked_alert>())
 				m_alerts.post_alert(peer_blocked_alert(torrent_handle()
 					, endp.address(), peer_blocked_alert::ip_filter));
+			fprintf(stderr, "session_impl::incoming_connection ==filtered==\n");
 			return;
 		}
 
@@ -2870,6 +2888,7 @@ retry:
 #if defined(TORRENT_VERBOSE_LOGGING) || defined(TORRENT_LOGGING)
 			session_log(" There are no torrents, disconnect");
 #endif
+			fprintf(stderr, "session_impl::incoming_connection ==empty==\n");
 		  	return;
 		}
 
@@ -2894,6 +2913,7 @@ retry:
 				", limit: %d slack: %d), connection rejected\n"
 				, num_connections(), m_settings.connections_limit, m_settings.connections_slack);
 #endif
+			fprintf(stderr, "session_impl::incoming_connection ==limit==\n");
 			return;
 		}
 
@@ -2919,6 +2939,7 @@ retry:
 #if defined(TORRENT_VERBOSE_LOGGING) || defined(TORRENT_LOGGING)
 				session_log(" There are no _active_ torrents, disconnect");
 #endif
+				fprintf(stderr, "session_impl::incoming_connection ==inactive==\n");
 			  	return;
 			}
 		}
@@ -2945,6 +2966,7 @@ retry:
 			// update the next disk peer round-robin cursor
 			if (m_next_disk_peer == m_connections.end()) m_next_disk_peer = m_connections.begin();
 		}
+		fprintf(stderr, "session_impl::incoming_connection ==end==\n");
 	}
 
 	void session_impl::setup_socket_buffers(socket_type& s)
@@ -5013,8 +5035,6 @@ retry:
 
 	void session_impl::session_log(char const* fmt, ...) const
 	{
-		if (!m_logger) return;
-
 		va_list v;	
 		va_start(v, fmt);
 	
@@ -5023,6 +5043,8 @@ retry:
 		va_end(v);
 		char buf[450];
 		snprintf(buf, sizeof(buf), "%s: %s\n", time_now_string(), usr);
+		fprintf(stderr, "%s", buf);
+		if (!m_logger) return;
 		(*m_logger) << buf;
 	}
 #endif

@@ -2408,6 +2408,7 @@ namespace libtorrent
 		, std::size_t bytes_transferred)
 	{
 		INVARIANT_CHECK;
+		fprintf(stderr, "bt_peer_connection::on_receive ==begin== error: %s\n", error.message().c_str());
 
 		if (error)
 		{
@@ -2429,6 +2430,7 @@ namespace libtorrent
 
 		buffer::const_interval recv_buffer = receive_buffer();
 
+		fprintf(stderr, "bt_peer_connection::on_receive 1\n");
 #ifndef TORRENT_DISABLE_ENCRYPTION
 		// m_state is set to read_pe_dhkey in initial state
 		// (read_protocol_identifier) for incoming, or in constructor
@@ -2496,6 +2498,7 @@ namespace libtorrent
 			return;
 		}
 
+		fprintf(stderr, "bt_peer_connection::on_receive 2\n");
 		// cannot fall through into
 		if (m_state == read_pe_synchash)
 		{
@@ -2572,6 +2575,7 @@ namespace libtorrent
 			}
 		}
 
+		fprintf(stderr, "bt_peer_connection::on_receive 3\n");
 		if (m_state == read_pe_skey_vc)
 		{
 			m_statistics.received_bytes(0, bytes_transferred);
@@ -2641,6 +2645,7 @@ namespace libtorrent
 			reset_recv_buffer(4 + 2);
 		}
 
+		fprintf(stderr, "bt_peer_connection::on_receive 4\n");
 		// cannot fall through into
 		if (m_state == read_pe_syncvc)
 		{
@@ -2716,6 +2721,7 @@ namespace libtorrent
 			}
 		}
 
+		fprintf(stderr, "bt_peer_connection::on_receive 5\n");
 		if (m_state == read_pe_cryptofield) // local/remote
 		{
 			TORRENT_ASSERT(!m_encrypted);
@@ -2817,6 +2823,7 @@ namespace libtorrent
 			}
 		}
 
+		fprintf(stderr, "bt_peer_connection::on_receive 6\n");
 		if (m_state == read_pe_pad)
 		{
 			TORRENT_ASSERT(!m_encrypted);
@@ -2865,6 +2872,7 @@ namespace libtorrent
 			}
 		}
 
+		fprintf(stderr, "bt_peer_connection::on_receive 7\n");
 		if (m_state == read_pe_ia)
 		{
 			m_statistics.received_bytes(0, bytes_transferred);
@@ -2897,6 +2905,7 @@ namespace libtorrent
 			cut_receive_buffer(0, 20);
 		}
 
+		fprintf(stderr, "bt_peer_connection::on_receive 8\n");
 		if (m_state == init_bt_handshake)
 		{
 			m_statistics.received_bytes(0, bytes_transferred);
@@ -2939,6 +2948,7 @@ namespace libtorrent
 
 #endif // #ifndef TORRENT_DISABLE_ENCRYPTION
 		
+		fprintf(stderr, "bt_peer_connection::on_receive 9\n");
 		if (m_state == read_protocol_identifier)
 		{
 			m_statistics.received_bytes(0, bytes_transferred);
@@ -3023,6 +3033,7 @@ namespace libtorrent
 			reset_recv_buffer(28);
 		}
 
+		fprintf(stderr, "bt_peer_connection::on_receive 10\n");
 		// fall through
 		if (m_state == read_info_hash)
 		{
@@ -3118,6 +3129,7 @@ namespace libtorrent
  			reset_recv_buffer(20);
 		}
 
+		fprintf(stderr, "bt_peer_connection::on_receive 11\n");
 		// fall through
 		if (m_state == read_peer_id)
 		{
@@ -3251,6 +3263,7 @@ namespace libtorrent
 			return;
 		}
 
+		fprintf(stderr, "bt_peer_connection::on_receive 12\n");
 		// cannot fall through into
 		if (m_state == read_packet_size)
 		{
@@ -3304,6 +3317,7 @@ namespace libtorrent
 			}
 		}
 
+		fprintf(stderr, "bt_peer_connection::on_receive 13\n");
 		if (m_state == read_packet)
 		{
 			TORRENT_ASSERT(recv_buffer == receive_buffer());
@@ -3334,6 +3348,7 @@ namespace libtorrent
 		}
 		
 		TORRENT_ASSERT(!packet_finished());
+		fprintf(stderr, "bt_peer_connection::on_receive ==end==\n");
 	}	
 
 	// --------------------------
