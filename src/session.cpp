@@ -329,6 +329,9 @@ namespace libtorrent
 #define TORRENT_ASYNC_CALL3(x, a1, a2, a3) \
 	m_impl->m_io_service.dispatch(boost::bind(&session_impl:: x, m_impl.get(), a1, a2, a3))
 
+#define TORRENT_ASYNC_CALL4(x, a1, a2, a3, a4) \
+	m_impl->m_io_service.dispatch(boost::bind(&session_impl:: x, m_impl.get(), a1, a2, a3, a4))
+
 #define TORRENT_WAIT \
 	mutex::scoped_lock l(m_impl->mut); \
 	while (!done) { m_impl->cond.wait(l); };
@@ -428,6 +431,17 @@ namespace libtorrent
 			add_extension(create_smart_ban_plugin);
 		}
 #endif
+		if (flags & ssl_session)
+		{
+			fprintf(stderr, "session_impl::init_ses_ssl ==call_site==\n");
+			std::string cert = "ca/certs/ca.cert.pem";
+
+			std::ifstream cert_file(cert);
+			std::string cert_text((std::istreambuf_iterator<char>(cert_file)),
+                 std::istreambuf_iterator<char>());
+			fprintf(stderr, "settings cert set to [\n%s\n]", cert_text.c_str());
+			m_impl->init_ses_ssl(cert_text);
+		}
 
 		m_impl->start_session();
 
@@ -453,6 +467,20 @@ namespace libtorrent
 			TORRENT_ASYNC_CALL(abort);
 		}
 	}
+
+#ifdef TORRENT_USE_OPENSSL
+	void session::set_ses_ssl_certificate(std::string const& certificate
+		, std::string const& private_key
+		, std::string const& dh_params
+		, std::string const& passphrase)
+	{
+		fprintf(stderr, "session::set_ses_ssl_certificate ==begin==\n");
+#ifdef TORRENT_USE_OPENSSL
+		TORRENT_ASYNC_CALL4(set_ses_ssl_cert, certificate, private_key, dh_params, passphrase);
+#endif
+		fprintf(stderr, "session::set_ses_ssl_certificate ==end==\n");
+	}
+#endif
 
 	void session::save_state(entry& e, boost::uint32_t flags) const
 	{

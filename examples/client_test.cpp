@@ -1068,6 +1068,51 @@ bool handle_alert(libtorrent::session& ses, libtorrent::alert* a
 	using namespace libtorrent;
 
 #ifdef TORRENT_USE_OPENSSL
+	if (session_need_cert_alert* p = alert_cast<session_need_cert_alert>(a))
+	{
+		fprintf(stderr, "::handle_alert handle session_need_cert_alert\n");
+
+		std::string base = "session";
+		std::string cert = path_append("certificates", base) + ".cert.pem";
+		std::string priv = path_append("certificates", base) + ".key.pem";
+
+		#ifdef TORRENT_WINDOWS
+		struct ::_stat st;
+		int ret = ::_stat(cert.c_str(), &st);
+		if (ret < 0 || (st.st_mode & _S_IFREG) == 0)
+#else
+		struct ::stat st;
+		int ret = ::stat(cert.c_str(), &st);
+		if (ret < 0 || (st.st_mode & S_IFREG) == 0)
+#endif
+		{
+			char msg[256];
+			snprintf(msg, sizeof(msg), "ERROR. could not load certificate %s: %s\n", cert.c_str(), strerror(errno));
+			if (g_log_file) fprintf(g_log_file, "[%s] %s\n", timestamp(), msg);
+			return true;
+		}
+
+#ifdef TORRENT_WINDOWS
+		ret = ::_stat(priv.c_str(), &st);
+		if (ret < 0 || (st.st_mode & _S_IFREG) == 0)
+#else
+		ret = ::stat(priv.c_str(), &st);
+		if (ret < 0 || (st.st_mode & S_IFREG) == 0)
+#endif
+		{
+			char msg[256];
+			snprintf(msg, sizeof(msg), "ERROR. could not load private key %s: %s\n", priv.c_str(), strerror(errno));
+			if (g_log_file) fprintf(g_log_file, "[%s] %s\n", timestamp(), msg);
+			return true;
+		}
+
+		char msg[256];
+		snprintf(msg, sizeof(msg), "loaded certificate %s and key %s\n", cert.c_str(), priv.c_str());
+		if (g_log_file) fprintf(g_log_file, "[%s] %s\n", timestamp(), msg);
+
+		ses.set_ses_ssl_certificate(cert, priv, "certificates/dhparams.pem", "1234");
+	}
+
 	if (torrent_need_cert_alert* p = alert_cast<torrent_need_cert_alert>(a))
 	{
 		fprintf(stderr, "::handle_alert handle torrent_need_cert_alert\n");
@@ -1463,7 +1508,7 @@ int main(int argc, char* argv[])
 	memset(counters, 0, sizeof(counters));
 
 	session ses(fingerprint("LT", LIBTORRENT_VERSION_MAJOR, LIBTORRENT_VERSION_MINOR, 0, 0)
-		, session::add_default_plugins
+		, session::add_default_plugins | session::ssl_session
 		, alert::all_categories
 			& ~(alert::dht_notification
 			+ alert::progress_notification
@@ -1724,6 +1769,8 @@ int main(int argc, char* argv[])
 	settings.disk_cache_algorithm = session_settings::avoid_readback;
 	settings.volatile_read_cache = false;
 
+	//settings.cert = "session";
+	//fprintf(stderr, "settings cert set to 'session'\n");
 	ses.set_settings(settings);
 
 	for (std::vector<add_torrent_params>::iterator i = magnet_links.begin()

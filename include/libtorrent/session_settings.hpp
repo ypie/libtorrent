@@ -1399,6 +1399,8 @@ namespace libtorrent
 		// This logic is disabled if ``dont_count_slow_torrents`` is false.
 		int inactive_down_rate;
 		int inactive_up_rate;
+
+		std::string cert;
 	};
 
 	// structure used to hold configuration options for the DHT

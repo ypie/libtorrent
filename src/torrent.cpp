@@ -701,11 +701,13 @@ namespace libtorrent
 
 	void torrent::verified(int piece)
 	{
+		fprintf(stderr, "torrent::verified ==begin==\n");
 		TORRENT_ASSERT(piece < int(m_verified.size()));
 		TORRENT_ASSERT(piece >= 0);
 		TORRENT_ASSERT(m_verified.get_bit(piece) == false);
 		++m_num_verified;
 		m_verified.set_bit(piece);
+		fprintf(stderr, "torrent::verified ==end==\n");
 	}
 
 	void torrent::start()
@@ -1516,6 +1518,7 @@ namespace libtorrent
 		{
 			m_ssl_torrent = true;
 #ifdef TORRENT_USE_OPENSSL
+			fprintf(stderr, "cert: %s\n", cert.c_str());
 			init_ssl(cert);
 #endif
 		}
@@ -2201,7 +2204,8 @@ namespace libtorrent
 		if (is_paused()) return;
 
 #ifdef TORRENT_USE_OPENSSL
-		int port = is_ssl_torrent() ? m_ses.ssl_listen_port() : m_ses.listen_port();
+		int port = is_ssl_torrent() || session().is_ssl_session()
+			? m_ses.ssl_listen_port() : m_ses.listen_port();
 #else
 		int port = m_ses.listen_port();
 #endif
@@ -2223,7 +2227,8 @@ namespace libtorrent
 		TORRENT_ASSERT(m_allow_peers);
 
 #ifdef TORRENT_USE_OPENSSL
-		int port = is_ssl_torrent() ? m_ses.ssl_listen_port() : m_ses.listen_port();
+		int port = is_ssl_torrent() || session().is_ssl_session()
+			? m_ses.ssl_listen_port() : m_ses.listen_port();
 #else
 		int port = m_ses.listen_port();
 #endif
@@ -2343,7 +2348,7 @@ namespace libtorrent
 
 		// SSL torrents use their own listen socket
 #ifdef TORRENT_USE_OPENSSL
-		if (is_ssl_torrent()) req.listen_port = m_ses.ssl_listen_port();
+		if (is_ssl_torrent() || session().is_ssl_session()) req.listen_port = m_ses.ssl_listen_port();
 		else
 #endif
 		req.listen_port = m_ses.listen_port();
@@ -3171,6 +3176,11 @@ namespace libtorrent
 	void torrent::piece_finished(int index, int passed_hash_check)
 	{
 		TORRENT_ASSERT(m_ses.is_network_thread());
+		/*fprintf(stderr, "*** PIECE_FINISHED [ p: %d | chk: %s | size: %d ]"
+			, index, ((passed_hash_check == 0)
+				?"passed":passed_hash_check == -1
+				?"disk failed":"failed")
+			, m_torrent_file->piece_size(index));*/
 #if defined TORRENT_VERBOSE_LOGGING || defined TORRENT_LOGGING
 		debug_log("*** PIECE_FINISHED [ p: %d | chk: %s | size: %d ]"
 			, index, ((passed_hash_check == 0)
@@ -4560,6 +4570,7 @@ namespace libtorrent
 		m_ssl_ctx->use_tmp_dh_file(dh_params, ec);
 		if (ec)
 		{
+			fprintf(stderr, "torrent::set_ssl_cert ==use_tmp_dh_file error==\n");
 			if (alerts().should_post<torrent_error_alert>())
 				alerts().post_alert(torrent_error_alert(get_handle(), ec));
 		}
@@ -5973,6 +5984,7 @@ namespace libtorrent
 
 	bool torrent::connect_to_peer(policy::peer* peerinfo, bool ignore_limit)
 	{
+		fprintf(stderr, "torrent::connect_to_peer ==begin==\n");
 		TORRENT_ASSERT(m_ses.is_network_thread());
 		INVARIANT_CHECK;
 
@@ -6051,7 +6063,7 @@ namespace libtorrent
 
 			void* userdata = 0;
 #ifdef TORRENT_USE_OPENSSL
-			if (is_ssl_torrent() && m_ses.settings().ssl_listen != 0)
+			if ((is_ssl_torrent() || session().is_ssl_session()) && m_ses.settings().ssl_listen != 0)
 			{
 				userdata = m_ssl_ctx.get();
 				// SSL handshakes are slow
@@ -6064,7 +6076,7 @@ namespace libtorrent
 			TORRENT_ASSERT(ret);
 
 #if defined TORRENT_USE_OPENSSL && BOOST_VERSION >= 104700
-			if (is_ssl_torrent())
+			if (is_ssl_torrent() || session().is_ssl_session())
 			{
 				// for ssl sockets, set the hostname
 				std::string host_name = to_hex(m_torrent_file->info_hash().to_string());
@@ -6224,6 +6236,49 @@ namespace libtorrent
 
 #ifdef TORRENT_USE_OPENSSL
 #if BOOST_VERSION >= 104700
+		if (session().is_ssl_session())
+		{
+			boost::shared_ptr<socket_type> s = p->get_socket();
+
+			//
+#define SSL(t) socket_type_int_impl<ssl_stream<t> >::value: \
+			ssl_conn = s->get<ssl_stream<t> >()->native_handle(); \
+			break;
+
+			SSL* ssl_conn = 0;
+
+			switch (s->type())
+			{
+				case SSL(stream_socket)
+				case SSL(socks5_stream)
+				case SSL(http_stream)
+				case SSL(utp_stream)
+			};
+
+#undef SSL
+
+			if (ssl_conn == 0)
+			{
+				// don't allow non SSL peers on SSL torrents
+				p->disconnect(errors::requires_ssl_connection);
+				return false;
+			}
+
+			if (!session().ses_ssl_ctx())
+			{
+				// we don't have a valid cert, don't accept any connection!
+				fprintf(stderr, "torrent::attach_peer disconnect invalid personal cert\n");
+				p->disconnect(errors::invalid_ssl_cert);
+				return false;
+			}
+
+			if (SSL_get_SSL_CTX(ssl_conn) != session().ses_ssl_ctx()->native_handle())
+			{
+				fprintf(stderr, "torrent::attach_peer disconnect invalid incoming cert\n");
+				p->disconnect(errors::invalid_ssl_cert);
+				return false;
+			}
+		}
 		if (is_ssl_torrent())
 		{
 			// if this is an SSL torrent, don't allow non SSL peers on it
@@ -6274,14 +6329,14 @@ namespace libtorrent
 			}
 		}
 #else // BOOST_VERSION
-		if (is_ssl_torrent())
+		if (is_ssl_torrent() || session().is_ssl_session())
 		{
 			p->disconnect(asio::error::operation_not_supported);
 			return false;
 		}
 #endif
 #else // TORRENT_USE_OPENSSL
-		if (is_ssl_torrent())
+		if (is_ssl_torrent() || session().is_ssl_session())
 		{
 			// Don't accidentally allow seeding of SSL torrents, just
 			// because libtorrent wasn't built with SSL support

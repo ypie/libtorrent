@@ -1244,5 +1244,25 @@ namespace libtorrent {
 		return msg;
 	}
 
+	session_alert::session_alert()
+	{}
+
+	std::string session_alert::message() const
+	{
+		char msg[100];
+		snprintf(msg, sizeof(msg), "session_alert: generic");
+		return msg;
+	}
+
+	session_need_cert_alert::session_need_cert_alert()
+	{}
+
+	std::string session_need_cert_alert::message() const
+	{
+		char msg[100];
+		snprintf(msg, sizeof(msg), "session_alert: needs SSL certificate");
+		return msg;
+	}
+
 } // namespace libtorrent
 

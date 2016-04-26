@@ -576,6 +576,7 @@ namespace aux {
 	// be the hex encoded info-hash
 	int servername_callback(SSL *s, int *ad, void *arg)
 	{
+		fprintf(stderr, "::servername_callback ==begin==\n");
 		session_impl* ses = (session_impl*)arg;
 		const char* servername = SSL_get_servername(s, TLSEXT_NAMETYPE_host_name);
 	
@@ -595,18 +596,26 @@ namespace aux {
 		// if there isn't, fail
 		if (!t) return SSL_TLSEXT_ERR_ALERT_FATAL;
 
-		// if the torrent we found isn't an SSL torrent, also fail.
-		if (!t->is_ssl_torrent()) return SSL_TLSEXT_ERR_ALERT_FATAL;
+		// if the torrent we found isn't an SSL torrent and not ssl session, also fail.
+		if (!t->is_ssl_torrent() && !ses->is_ssl_session()) return SSL_TLSEXT_ERR_ALERT_FATAL;
 
-		// if the torrent doesn't have an SSL context and should not allow
-		// incoming SSL connections
-		if (!t->ssl_ctx()) return SSL_TLSEXT_ERR_ALERT_FATAL;
+		SSL_CTX *ssl_context;
 
-		// use this torrent's certificate
-		SSL_CTX *torrent_context = t->ssl_ctx()->native_handle();
+		if (ses->ses_ssl_ctx()) {
+			fprintf(stderr, "::servername_callback ==session==\n");
+			ssl_context = ses->ses_ssl_ctx()->native_handle();
+		} else if (t->ssl_ctx()){
+			fprintf(stderr, "::servername_callback ==torrent==\n");
+			ssl_context = t->ssl_ctx()->native_handle();
+		} else {
+			// if the torrent and session doesn't have an SSL context and should not allow
+			// incoming SSL connections
+			 return SSL_TLSEXT_ERR_ALERT_FATAL;
+		}
 
-		SSL_set_SSL_CTX(s, torrent_context);
-		SSL_set_verify(s, SSL_CTX_get_verify_mode(torrent_context), SSL_CTX_get_verify_callback(torrent_context));
+		SSL_set_SSL_CTX(s, ssl_context);
+		SSL_set_verify(s, SSL_CTX_get_verify_mode(ssl_context), SSL_CTX_get_verify_callback(ssl_context));
+		fprintf(stderr, "::servername_callback ==end==\n");
 
 		return SSL_TLSEXT_ERR_OK;
 	}
@@ -626,6 +635,7 @@ namespace aux {
 		, m_send_buffers(send_buffer_size)
 #endif
 		, m_files(40)
+		, m_ssl_session(false)
 		, m_io_service()
 #ifdef TORRENT_USE_OPENSSL
 		, m_ssl_ctx(m_io_service, asio::ssl::context::sslv23)
@@ -779,9 +789,11 @@ namespace aux {
 		m_ssl_ctx.set_verify_mode(asio::ssl::context::verify_none, ec);
 #if BOOST_VERSION >= 104700
 #if OPENSSL_VERSION_NUMBER >= 0x90812f
+		fprintf(stderr, "#if OPENSSL_VERSION_NUMBER >= 0x90812f\n");
 		SSL_CTX_set_tlsext_servername_callback(m_ssl_ctx.native_handle(), servername_callback);
 		SSL_CTX_set_tlsext_servername_arg(m_ssl_ctx.native_handle(), this);
 #endif // OPENSSL_VERSION_NUMBER
+
 #endif // BOOST_VERSION
 #endif
 
@@ -2613,7 +2625,7 @@ retry:
 
 	void session_impl::async_accept(boost::shared_ptr<socket_acceptor> const& listener, bool ssl)
 	{
-		fprintf(stderr, "session_impl::async_accept ==begin==\n");
+		fprintf(stderr, "session_impl::async_accept ==begin== ssl: %d\n", ssl);
 		TORRENT_ASSERT(!m_abort);
 		shared_ptr<socket_type> c(new socket_type(m_io_service));
 		stream_socket* str = 0;
@@ -2648,25 +2660,44 @@ retry:
 	void session_impl::on_accept_connection(shared_ptr<socket_type> const& s
 		, weak_ptr<socket_acceptor> listen_socket, error_code const& e, bool ssl)
 	{
-		fprintf(stderr, "session_impl::on_accept_connection ==begin==\n");
+		fprintf(stderr, "session_impl::on_accept_connection ==begin== ssl: %d\n", ssl);
 #if defined TORRENT_ASIO_DEBUGGING
 		complete_async("session_impl::on_accept_connection");
 #endif
+		if (is_ssl_session() && !ssl)
+		{
+			fprintf(stderr, "session_impl::on_accept_connection ==not ssl==\n");
+			//return;
+		}
 #ifdef TORRENT_STATS
 		++m_num_messages[on_accept_counter];
 #endif
 		TORRENT_ASSERT(is_network_thread());
 		boost::shared_ptr<socket_acceptor> listener = listen_socket.lock();
-		if (!listener) return;
+		if (!listener)
+		{
+			fprintf(stderr, "session_impl::on_accept_connection ==not listener==\n");
+			return;
+		}
 		
-		if (e == asio::error::operation_aborted) return;
+		if (e == asio::error::operation_aborted)
+		{
+			fprintf(stderr, "session_impl::on_accept_connection ==aborted==\n");
+			return;
+		}
 
-		if (m_abort) return;
+		if (m_abort)
+		{
+			fprintf(stderr, "session_impl::on_accept_connection ==abort==\n");
+			return;
+		}
 
 		error_code ec;
 		if (e)
 		{
 			tcp::endpoint ep = listener->local_endpoint(ec);
+			fprintf(stderr, "error accepting connection on '%s': %s\n"
+				, print_endpoint(ep).c_str(), e.message().c_str());
 #if defined(TORRENT_VERBOSE_LOGGING) || defined(TORRENT_LOGGING)
 			session_log("error accepting connection on '%s': %s"
 				, print_endpoint(ep).c_str(), e.message().c_str());
@@ -2745,6 +2776,175 @@ retry:
 	}
 
 #ifdef TORRENT_USE_OPENSSL
+	void session_impl::init_ses_ssl(std::string const& cert)
+	{
+		fprintf(stderr, "session_impl::init_ses_ssl ==begin==\n");
+		using boost::asio::ssl::context;
+
+		// this is needed for openssl < 1.0 to decrypt keys created by openssl 1.0+
+		OpenSSL_add_all_algorithms();
+
+		boost::uint64_t now = total_microseconds(time_now_hires() - min_time());
+		// assume 9 bits of entropy (i.e. about 1 millisecond)
+		RAND_add(&now, 8, 1.125);
+		// entropy is also added on incoming and completed connection attempts
+
+		TORRENT_ASSERT(RAND_status() == 1);
+
+#if BOOST_VERSION >= 104700
+
+		// create the SSL context for this torrent. We need to
+		// inject the root certificate, and no other, to
+		// verify other peers against
+		boost::shared_ptr<context> ctx(
+			new (std::nothrow) context(m_io_service, context::sslv23));
+
+		if (!ctx)
+		{
+			error_code ec(::ERR_get_error(),
+				asio::error::get_ssl_category());
+			// set_error(ec, "SSL context"); // pause();
+			fprintf(stderr, "session_impl::init_ses_ssl ==return1==\n");
+			return;
+		}
+
+		ctx->set_options(context::default_workarounds
+			| boost::asio::ssl::context::no_sslv2
+			| boost::asio::ssl::context::single_dh_use);
+
+		error_code ec;
+		ctx->set_verify_mode(context::verify_peer
+			| context::verify_fail_if_no_peer_cert
+			| context::verify_client_once, ec);
+		if (ec)
+		{
+			// set_error(ec, "SSL verify mode"); // pause();
+			fprintf(stderr, "session_impl::init_ses_ssl ==return2==\n");
+			return;
+		}
+
+		fprintf(stderr, "session_impl::init_ses_ssl ==verify_session_cert==\n");
+		ctx->set_verify_callback(boost::bind(&session_impl::verify_session_cert, this, _1, _2), ec);
+		if (ec)
+		{
+			//set_error(ec, "SSL verify callback"); //pause();
+			fprintf(stderr, "session_impl::init_ses_ssl ==return3==\n");
+			return;
+		}
+
+		SSL_CTX* ssl_ctx = ctx->impl();
+
+		// create a new x.509 certificate store
+		X509_STORE* cert_store = X509_STORE_new();
+		if (!cert_store)
+		{
+			error_code ec(::ERR_get_error(),
+				asio::error::get_ssl_category());
+			// set_error(ec, "x.509 certificate store"); // pause();
+			fprintf(stderr, "session_impl::init_ses_ssl ==return4==\n");
+			return;
+		}
+
+		// wrap the PEM certificate in a BIO, for openssl to read
+		BIO* bp = BIO_new_mem_buf((void*)cert.c_str(), cert.size());
+
+		// parse the certificate into OpenSSL's internal
+		// representation
+		X509* certificate = PEM_read_bio_X509_AUX(bp, 0, 0, 0);
+
+		BIO_free(bp);
+
+		if (!certificate)
+		{
+			error_code ec(::ERR_get_error(),
+				asio::error::get_ssl_category());
+			X509_STORE_free(cert_store);
+			// set_error(ec, "x.509 certificate"); // pause();
+			fprintf(stderr, "session_impl::init_ses_ssl ==return5==\n");
+			return;
+		}
+
+		// add cert to cert_store
+		X509_STORE_add_cert(cert_store, certificate);
+
+		X509_free(certificate);
+
+		// and lastly, replace the default cert store with ours
+		SSL_CTX_set_cert_store(ssl_ctx, cert_store);
+
+		// if all went well, set the torrent ssl context to this one
+		m_ses_ssl_ctx = ctx;
+		// tell the client we need a cert for this torrent
+		fprintf(stderr, "session_impl::init_ses_ssl post session_need_cert_alert\n");
+		m_alerts.post_alert(session_need_cert_alert());
+		m_ssl_session = true;
+#else
+		set_error(asio::error::operation_not_supported, "x.509 certificate");
+		pause();
+#endif
+		fprintf(stderr, "session_impl::init_ses_ssl ==end==\n");
+	}
+
+	bool session_impl::verify_session_cert(bool preverified, boost::asio::ssl::verify_context& ctx)
+	{
+		return preverified;
+	}
+
+	std::string password_callback(int length, boost::asio::ssl::context::password_purpose p
+		, std::string pw)
+	{
+		if (p != boost::asio::ssl::context::for_reading) return "";
+		return pw;
+	}
+
+	void session_impl::set_ses_ssl_cert(std::string const& certificate
+		, std::string const& private_key
+		, std::string const& dh_params
+		, std::string const& passphrase)
+	{
+		fprintf(stderr, "session_impl::set_ses_ssl_cert ==begin==\n");
+		if (!m_ses_ssl_ctx)
+		{
+			/*
+			if (alerts().should_post<torrent_error_alert>())
+				alerts().post_alert(torrent_error_alert(get_handle()
+					, error_code(errors::not_an_ssl_torrent)));
+			*/
+			return;
+		}
+
+		using boost::asio::ssl::context;
+		error_code ec;
+		m_ses_ssl_ctx->set_password_callback(boost::bind(&password_callback, _1, _2, passphrase), ec);
+		if (ec)
+		{
+			fprintf(stderr, "session_impl::set_ses_ssl_cert ==error==\n");
+			// if (alerts().should_post<torrent_error_alert>())
+			//	alerts().post_alert(torrent_error_alert(get_handle(), ec));
+		}
+		m_ses_ssl_ctx->use_certificate_file(certificate, context::pem, ec);
+		if (ec)
+		{
+			fprintf(stderr, "session_impl::set_ses_ssl_cert ==error==\n");
+			// if (alerts().should_post<torrent_error_alert>())
+			// 	alerts().post_alert(torrent_error_alert(get_handle(), ec));
+		}
+		m_ses_ssl_ctx->use_private_key_file(private_key, context::pem, ec);
+		if (ec)
+		{
+			fprintf(stderr, "session_impl::set_ses_ssl_cert ==error==\n");
+			// if (alerts().should_post<torrent_error_alert>())
+			// 	alerts().post_alert(torrent_error_alert(get_handle(), ec));
+		}
+		m_ses_ssl_ctx->use_tmp_dh_file(dh_params, ec);
+		if (ec)
+		{
+			fprintf(stderr, "session_impl::set_ses_ssl_cert ==error==\n");
+			// if (alerts().should_post<torrent_error_alert>())
+			// 	alerts().post_alert(torrent_error_alert(get_handle(), ec));
+		}
+		fprintf(stderr, "session_impl::set_ses_ssl_cert ==end==\n");
+	}
 
 	// to test SSL connections, one can use this openssl command template:
 	// 
@@ -2822,6 +3022,8 @@ retry:
 			return;
 		}
 
+		fprintf(stderr, " <== INCOMING CONNECTION %s type: %s\n"
+			, print_endpoint(endp).c_str(), s->type_name());
 #if defined(TORRENT_VERBOSE_LOGGING) || defined(TORRENT_LOGGING)
 		session_log(" <== INCOMING CONNECTION %s type: %s"
 			, print_endpoint(endp).c_str(), s->type_name());
@@ -2830,6 +3032,14 @@ retry:
 		if (m_alerts.should_post<incoming_connection_alert>())
 		{
 			m_alerts.post_alert(incoming_connection_alert(s->type(), endp));
+		}
+
+		if (is_ssl_session() && false/*!s->get<ssl_stream>()*/)
+		{
+#if defined(TORRENT_VERBOSE_LOGGING) || defined(TORRENT_LOGGING)
+			session_log("    rejected non-SSL connection");
+#endif
+			return;
 		}
 
 		if (!m_settings.enable_incoming_utp

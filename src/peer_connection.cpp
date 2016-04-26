@@ -1080,7 +1080,7 @@ namespace libtorrent
 	void peer_connection::attach_to_torrent(sha1_hash const& ih, bool allow_encrypted)
 	{
 		INVARIANT_CHECK;
-		fprintf(stderr, "peer_connection::attach_to_torrent ==begin==\n");
+		//fprintf(stderr, "peer_connection::attach_to_torrent ==begin==\n");
 
 		TORRENT_ASSERT(!m_disconnecting);
 		TORRENT_ASSERT(m_torrent.expired());
@@ -2297,6 +2297,7 @@ namespace libtorrent
 
 	void peer_connection::incoming_piece(peer_request const& p, disk_buffer_holder& data)
 	{
+		//fprintf(stderr, "peer_connection::incoming_piece ==begin==\n");
 		INVARIANT_CHECK;
 
 		boost::shared_ptr<torrent> t = m_torrent.lock();
@@ -2603,6 +2604,7 @@ namespace libtorrent
 #endif
 		request_a_block(*t, *this);
 		send_block_requests();
+		//fprintf(stderr, "peer_connection::incoming_piece ==end==\n");
 	}
 
 	void peer_connection::on_disk_write_complete(int ret, disk_io_job const& j
@@ -5007,6 +5009,7 @@ namespace libtorrent
 
 	void peer_connection::setup_receive(sync_t sync)
 	{
+		//fprintf(stderr, "peer_connection::setup_receive ==begin==\n");
 		INVARIANT_CHECK;
 
 		if (m_disconnecting) return;
@@ -5069,6 +5072,7 @@ namespace libtorrent
 
 	size_t peer_connection::try_read(sync_t s, error_code& ec)
 	{
+		//fprintf(stderr, "peer_connection::try_read ==begin==\n");
 		TORRENT_ASSERT(m_packet_size > 0);
 		int max_receive = m_packet_size - m_recv_pos;
 		TORRENT_ASSERT(max_receive >= 0);
@@ -5301,6 +5305,7 @@ namespace libtorrent
 	void peer_connection::on_receive_data(const error_code& error
 		, std::size_t bytes_transferred)
 	{
+		//fprintf(stderr, "peer_connection::on_receive_data ==begin==\n");
 #ifdef TORRENT_STATS
 		++m_ses.m_num_messages[aux::session_impl::on_read_counter];
 		int size = 8;
@@ -5478,6 +5483,7 @@ namespace libtorrent
 
 	void peer_connection::on_connect(int ticket)
 	{
+		fprintf(stderr, "peer_connection::on_connect ==begin==\n");
 		TORRENT_ASSERT(m_ses.is_network_thread());
 #if TORRENT_USE_ASSERTS
 		// in case we disconnect here, we need to
@@ -5586,6 +5592,7 @@ namespace libtorrent
 	
 	void peer_connection::on_connection_complete(error_code const& e)
 	{
+		fprintf(stderr, "peer_connection::on_connection_complete ==begin==\n");
 #if defined TORRENT_ASIO_DEBUGGING
 		complete_async("peer_connection::on_connection_complete");
 #endif

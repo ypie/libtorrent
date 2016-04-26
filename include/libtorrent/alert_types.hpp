@@ -111,6 +111,14 @@ namespace libtorrent
 		std::string url;
 	};
 
+	struct TORRENT_EXPORT session_alert: alert
+	{
+		session_alert();
+
+		const static int alert_type = 4;
+		virtual std::string message() const;
+	};
+
 #define TORRENT_DEFINE_ALERT(name) \
 	const static int alert_type = __LINE__; \
 	virtual int type() const { return alert_type; } \
@@ -118,6 +126,16 @@ namespace libtorrent
 	{ return std::auto_ptr<alert>(new name(*this)); } \
 	virtual int category() const { return static_category; } \
 	virtual char const* what() const { return #name; }
+
+	struct TORRENT_EXPORT session_need_cert_alert: session_alert
+	{
+		// internal
+		session_need_cert_alert();
+
+		TORRENT_DEFINE_ALERT(session_need_cert_alert);
+		const static int static_category = alert::status_notification;
+		virtual std::string message() const;
+	};
 
 	// The ``torrent_added_alert`` is posted once every time a torrent is successfully
 	// added. It doesn't contain any members of its own, but inherits the torrent handle

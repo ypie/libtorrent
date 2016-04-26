@@ -1603,6 +1603,7 @@ namespace libtorrent
 
 	bool policy::connect_one_peer(int session_time)
 	{
+		fprintf(stderr, "policy::connect_one_peer ==begin==\n");
 		INVARIANT_CHECK;
 
 		TORRENT_ASSERT(m_torrent->want_more_peers());

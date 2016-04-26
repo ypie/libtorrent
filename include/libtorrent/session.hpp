@@ -252,6 +252,13 @@ namespace libtorrent
 #endif
 		};
 
+#ifdef TORRENT_USE_OPENSSL
+		void set_ses_ssl_certificate(std::string const& certificate
+			, std::string const& private_key
+			, std::string const& dh_params
+			, std::string const& passphrase);
+#endif
+
 		// loads and saves all session settings, including dht_settings,
 		// encryption settings and proxy settings. ``save_state`` writes all keys
 		// to the ``entry`` that's passed in, which needs to either not be
@@ -809,7 +816,9 @@ namespace libtorrent
 
 			// this will start features like DHT, local service discovery, UPnP
 			// and NAT-PMP.
-			start_default_features = 2
+			start_default_features = 2,
+
+			ssl_session = 4
 		};
 
 		// ``remove_torrent()`` will close all peer connections associated with

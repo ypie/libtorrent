@@ -680,10 +680,18 @@ namespace libtorrent
 			// them
 			mutable io_service m_io_service;
 
+			bool m_ssl_session:1;
 #ifdef TORRENT_USE_OPENSSL
 			// this is a generic SSL context used when talking to
 			// unauthenticated HTTPS servers
 			asio::ssl::context m_ssl_ctx;
+			boost::shared_ptr<asio::ssl::context> m_ses_ssl_ctx;
+
+#if BOOST_VERSION >= 104700
+			bool verify_session_cert(bool preverified, boost::asio::ssl::verify_context& ctx);
+#endif
+
+			void init_ses_ssl(std::string const& cert);
 #endif
 
 			// handles delayed alerts
@@ -817,8 +825,14 @@ namespace libtorrent
 			boost::shared_ptr<socket_type> m_i2p_listen_socket;
 #endif
 
+			bool is_ssl_session() const { return m_ssl_session; }
 #ifdef TORRENT_USE_OPENSSL
+			void set_ses_ssl_cert(std::string const& certificate
+				, std::string const& private_key
+				, std::string const& dh_params
+				, std::string const& passphrase);
 			void ssl_handshake(error_code const& ec, boost::shared_ptr<socket_type> s);
+			boost::asio::ssl::context* ses_ssl_ctx() const { return m_ses_ssl_ctx.get(); }
 #endif
 
 			// when as a socks proxy is used for peers, also
